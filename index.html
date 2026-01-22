@@ -5,20 +5,21 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Aura Studio - AI Web Builder</title>
 
-    <!-- Environment Shim -->
+    <!-- Environment Shims -->
     <script>
       window.process = { env: { API_KEY: "" } };
+      window.global = window;
     </script>
 
-    <!-- Dependencies -->
+    <!-- UI Dependencies -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
 
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <!-- Corrected & to &amp; for HTML compliance -->
     <link
-      href="https://fonts.googleapis.com/css2?family=Verdana:wght@400;700&amp;family=Courier+Prime&amp;display=swap"
+      href="https://fonts.googleapis.com/css2?family=Verdana:wght@400;700&family=Courier+Prime&display=swap"
       rel="stylesheet"
     />
 
@@ -121,6 +122,7 @@
           "react-dom/client": "https://esm.sh/react-dom@^19.2.3/client",
           "react-router-dom": "https://esm.sh/react-router-dom@^7.12.0",
           "@google/genai": "https://esm.sh/@google/genai@^1.38.0",
+          "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@^2.39.7",
           "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
           "react/": "https://esm.sh/react@^19.2.3/"
         }
@@ -129,7 +131,7 @@
   </head>
   <body>
     <div id="root"></div>
-    <!-- Explicitly set the Babel presets and type to ensure compilation -->
+    <!-- Single Entry Point: Babel processes the entire application TypeScript -->
     <script
       type="text/babel"
       data-type="module"

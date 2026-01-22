@@ -3,40 +3,11 @@
   publish = "."
 
 [[redirects]]
-  # Specifically allow .tsx and .ts files to bypass the catch-all redirect
-  from = "/*.tsx"
-  to = "/*.tsx"
-  status = 200
-
-[[redirects]]
-  from = "/*.ts"
-  to = "/*.ts"
-  status = 200
-
-[[redirects]]
-  # SPA Catch-all (Only runs if the file doesn't exist)
   from = "/*"
   to = "/index.html"
   status = 200
 
 [[headers]]
   for = "/*.tsx"
-  [headers.values]
-    Content-Type = "application/javascript; charset=utf-8"
-    X-Content-Type-Options = "nosniff"
-
-[[headers]]
-  for = "/*.ts"
-  [headers.values]
-    Content-Type = "application/javascript; charset=utf-8"
-    X-Content-Type-Options = "nosniff"
-
-[[headers]]
-  for = "/**/*.tsx"
-  [headers.values]
-    Content-Type = "application/javascript; charset=utf-8"
-
-[[headers]]
-  for = "/**/*.ts"
   [headers.values]
     Content-Type = "application/javascript; charset=utf-8"
