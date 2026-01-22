@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../lib/supabase';
+import { supabase } from '../lib/supabase.ts';
 
 const LandingPage: React.FC = () => {
   const navigate = useNavigate();
@@ -16,8 +16,7 @@ const LandingPage: React.FC = () => {
         return;
       }
       try {
-        const { error } = await supabase.from('profiles').select('count', { count: 'exact', head: true }).limit(1);
-        // If we get an error about the table not existing, it's still "online" but unconfigured
+        await supabase.from('profiles').select('count', { count: 'exact', head: true }).limit(1);
         setDbStatus('online');
       } catch {
         setDbStatus('offline');

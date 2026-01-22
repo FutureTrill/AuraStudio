@@ -1,5 +1,12 @@
+
 [build]
   publish = "."
+
+[[redirects]]
+  # Avoid redirecting actual static files to index.html
+  from = "/*.tsx"
+  to = "/*.tsx"
+  status = 200
 
 [[redirects]]
   from = "/*"
@@ -7,11 +14,13 @@
   status = 200
 
 [[headers]]
-  for = "/*.tsx"
+  for = "/**/*.tsx"
   [headers.values]
-    Content-Type = "application/javascript"
+    Content-Type = "application/javascript; charset=utf-8"
+    X-Content-Type-Options = "nosniff"
 
 [[headers]]
-  for = "/*.ts"
+  for = "/**/*.ts"
   [headers.values]
-    Content-Type = "application/javascript"
+    Content-Type = "application/javascript; charset=utf-8"
+    X-Content-Type-Options = "nosniff"
