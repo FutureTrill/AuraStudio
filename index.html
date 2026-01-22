@@ -4,13 +4,18 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Aura Studio - AI Web Builder</title>
+
+    <!-- Dependencies -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       href="https://fonts.googleapis.com/css2?family=Verdana:wght@400;700&family=Courier+Prime&display=swap"
       rel="stylesheet"
     />
+
     <style>
       :root {
         --win-bg: #d4d0c8;
@@ -26,7 +31,7 @@
         background-color: var(--desktop-teal);
         color: #000;
         overflow: hidden;
-        /* Simple noise pattern fallback for the broken base64 */
+        /* Fixed Noise Pattern */
         background-image: radial-gradient(
           rgba(255, 255, 255, 0.05) 1px,
           transparent 1px
@@ -103,6 +108,7 @@
         box-shadow: inset -1px -1px var(--win-border-black);
       }
     </style>
+
     <script type="importmap">
       {
         "imports": {
@@ -117,6 +123,12 @@
   </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="./index.tsx"></script>
+    <!-- Babel transforms the .tsx into JS that the browser can understand -->
+    <script
+      type="text/babel"
+      data-type="module"
+      data-presets="typescript,react"
+      src="./index.tsx"
+    ></script>
   </body>
 </html>
