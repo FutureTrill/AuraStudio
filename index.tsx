@@ -1,215 +1,233 @@
-
-import React, { useState, useEffect, useRef } from 'react';
-import ReactDOM from 'react-dom/client';
-import { MemoryRouter as Router, Routes, Route, Navigate, useNavigate, Link } from 'react-router-dom';
+import React, { useState, useEffect, useRef } from "react";
+import ReactDOM from "react-dom/client";
+import {
+  MemoryRouter as Router,
+  Routes,
+  Route,
+  Navigate,
+  useNavigate,
+  Link,
+} from "react-router-dom";
 import { GoogleGenAI } from "@google/genai";
-import { createClient } from '@supabase/supabase-js';
+import { createClient } from "@supabase/supabase-js";
 
-// --- DATABASE CONFIGURATION ---
-const supabaseUrl = 'https://dsskcarhhhqgirlilfua.supabase.co';
-const supabaseAnonKey = 'sb_publishable_vL2yEBwIu80oi75r1JVFNg_ne83yZUw';
-const supabase = (supabaseUrl && supabaseAnonKey) ? createClient(supabaseUrl, supabaseAnonKey) : null;
+// --- CONFIG ---
+const supabaseUrl = "https://dsskcarhhhqgirlilfua.supabase.co";
+const supabaseAnonKey = "sb_publishable_vL2yEBwIu80oi75r1JVFNg_ne83yZUw";
+const supabase =
+  supabaseUrl && supabaseAnonKey
+    ? createClient(supabaseUrl, supabaseAnonKey)
+    : null;
 
 // --- TYPES ---
 interface Message {
-  role: 'user' | 'assistant' | 'model';
+  role: "user" | "assistant" | "model";
   content: string;
   timestamp: Date;
 }
 
 // --- SERVICES ---
 const storageService = {
-  async getUserProfile(userId: string) {
+  // BACKEND INTEGRATION: Replace these with your actual API endpoints
+  async saveProject(userId: string, code: string, history: Message[]) {
     if (!supabase) return null;
-    const { data } = await supabase.from('profiles').select('*').eq('id', userId).single();
-    return data;
+    return await supabase
+      .from("projects")
+      .insert({
+        user_id: userId,
+        name: "Aura Build",
+        code,
+        chat_history: history,
+      });
   },
-  async getAllProjects(userId: string) {
+  async getUserProjects(userId: string) {
     if (!supabase) return [];
-    const { data } = await supabase.from('projects').select('*').eq('user_id', userId).order('created_at', { ascending: false });
+    const { data } = await supabase
+      .from("projects")
+      .select("*")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false });
     return data || [];
   },
-  async getLatestProject(userId: string) {
-    if (!supabase) return null;
-    const { data } = await supabase.from('projects').select('*').eq('user_id', userId).order('created_at', { ascending: false }).limit(1).single();
-    return data;
-  },
-  async saveProject(userId: string, name: string, code: string, chatHistory: Message[]) {
-    if (!supabase) return null;
-    await supabase.from('projects').insert({ user_id: userId, name, code, chat_history: chatHistory });
-    const profile = await this.getUserProfile(userId);
-    const newCount = (profile?.usage_count || 0) + 1;
-    await supabase.from('profiles').update({ usage_count: newCount }).eq('id', userId);
-    return { success: true, newCount };
-  }
 };
 
 const generateWebsite = async (prompt: string, chatHistory: Message[]) => {
-  // Ensure we check for API Key presence
-  if (!process.env.API_KEY) {
-    throw new Error("API Key initialization failed. Check environment configuration.");
+  // Use a fallback for local testing if process.env isn't populated yet
+  const apiKey = process.env.API_KEY;
+  if (!apiKey) {
+    throw new Error(
+      "AURA_KEY_MISSING: Authentication with Gemini failed. Ensure API_KEY is set.",
+    );
   }
 
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenAI({ apiKey });
   const systemInstruction = `
-    You are the AURA_CORE v1.0.4 Senior Full Stack Architect.
-    PROTOCOL: Respond with SUMMARY: [1 sentence] and then CODE: [Wrapped in \`\`\`html code \`\`\`].
-    Use Tailwind CSS, Lucide Icons, and modern glassmorphism.
-    Output a single standalone HTML file.
+    You are AURA_CORE v2.0, a high-end web architect. 
+    Output logic: 1. SUMMARY: [brief sentence] 2. CODE: [Standalone HTML with Tailwind].
+    Use Lucide icons andInter font. Modern, sleek, professional design only.
   `;
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-preview',
+      model: "gemini-3-pro-preview",
       contents: [
-        ...chatHistory.map(h => ({ 
-          role: h.role === 'user' ? 'user' : 'model', 
-          parts: [{ text: h.content }] 
+        ...chatHistory.map((h) => ({
+          role: h.role === "user" ? "user" : "model",
+          parts: [{ text: h.content }],
         })),
-        { role: 'user', parts: [{ text: prompt }] }
+        { role: "user", parts: [{ text: prompt }] },
       ],
-      config: { 
-        systemInstruction, 
-        temperature: 0.7 
-      }
+      config: { systemInstruction, temperature: 0.7 },
     });
-
-    return response.text || "SYSTEM_FAILURE: Empty response.";
+    return response.text || "";
   } catch (err: any) {
-    throw new Error(`AURA_API_ERROR: ${err.message}`);
+    throw new Error(err.message);
   }
 };
-
-// --- UI COMPONENTS ---
-const WinTitleBar = ({ title, onClose }: { title: string, onClose?: () => void }) => (
-  <div className="win-title-bar select-none">
-    <div className="flex items-center gap-2">
-      <div className="w-3 h-3 bg-white/20 rounded-sm"></div>
-      <span className="truncate">{title}</span>
-    </div>
-    {onClose && (
-      <button onClick={onClose} className="win-button py-0 px-2 h-4 bg-red-800 text-white font-bold hover:bg-red-700">×</button>
-    )}
-  </div>
-);
 
 // --- PAGES ---
 const LandingPage = () => {
   const navigate = useNavigate();
-  const [isInitializing, setIsInitializing] = useState(false);
-  const [dbStatus, setDbStatus] = useState('checking');
-
-  useEffect(() => {
-    const checkDb = async () => {
-      if (!supabase) { setDbStatus('offline'); return; }
-      try {
-        await supabase.from('profiles').select('count', { count: 'exact', head: true }).limit(1);
-        setDbStatus('online');
-      } catch { setDbStatus('offline'); }
-    };
-    checkDb();
-  }, []);
-
-  const handleStart = () => {
-    setIsInitializing(true);
-    setTimeout(() => navigate('/studio'), 2800);
-  };
+  const [isHovered, setIsHovered] = useState(false);
 
   return (
-    <div className="min-h-screen bg-[#3b5a75] flex items-center justify-center p-4">
-      {!isInitializing ? (
-        <div className="win-panel w-full max-w-2xl animate-aura-in shadow-[10px_10px_0px_rgba(0,0,0,0.3)]">
-          <WinTitleBar title="Aura Studio Setup v1.0.4" />
-          <div className="flex bg-[#d4d0c8]">
-            <div className="w-56 bg-blue-900 p-8 text-white hidden md:flex flex-col gap-6">
-              <div className="w-16 h-16 bg-white rounded-lg flex items-center justify-center shadow-inner">
-                <div className="w-10 h-10 border-4 border-blue-900 rounded-full animate-pulse"></div>
-              </div>
-              <div>
-                <h3 className="text-xs font-bold uppercase tracking-widest">Aura_Core</h3>
-                <p className="text-[10px] opacity-60">Neural Synthesis Engine</p>
-              </div>
-              <div className="mt-auto opacity-20 text-[9px] font-mono">NODE_ID: 0x992-A<br/>BUILD: 2025.02.14</div>
-            </div>
-            <div className="flex-1 p-10 space-y-6">
-              <h1 className="text-3xl font-bold text-blue-900 italic tracking-tight">System Initialization</h1>
-              <p className="text-xs text-gray-800 leading-relaxed">
-                Welcome to Aura Studio. This environment is optimized for high-performance website synthesis.
-                Proceeding will establish a secure neural handshake with the AURA_CORE backbone.
-              </p>
-              <div className="win-inset bg-white p-4 h-32 overflow-y-auto font-mono text-[10px] text-gray-600 shadow-inner">
-                [ STATUS REPORT ]<br/>
-                > KERNEL: STABLE (0x01)<br/>
-                > UPLINK: {dbStatus.toUpperCase()}<br/>
-                > ASSETS: READY<br/>
-                > READY FOR SYNTHESIS...
-              </div>
-              <div className="flex justify-end gap-3 pt-4">
-                <button onClick={handleStart} className="win-button bg-blue-100 font-bold px-8 py-2">Initialize &gt;</button>
-                <button onClick={() => navigate('/login')} className="win-button px-8 py-2">Secure Login</button>
-              </div>
-            </div>
-          </div>
+    <div className="min-h-screen bg-[#0a0a0c] flex flex-col items-center justify-center relative overflow-hidden px-6">
+      {/* Background Decor */}
+      <div className="absolute top-[-20%] left-[-10%] w-[60%] h-[60%] aura-gradient opacity-10 rounded-full blur-[120px] animate-pulse-slow"></div>
+      <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] bg-blue-900 opacity-10 rounded-full blur-[100px] animate-pulse-slow"></div>
+
+      <div className="z-10 text-center space-y-8 max-w-3xl">
+        <div className="inline-block glass-panel px-4 py-1.5 rounded-full text-[10px] uppercase tracking-[0.2em] font-semibold text-blue-400 mb-4 animate-fade-in">
+          Neural Architecture Engine v2.0
         </div>
-      ) : (
-        <div className="win-panel w-80 animate-aura-in">
-          <WinTitleBar title="Mounting Aura_Core..." />
-          <div className="p-8 space-y-6 bg-[#d4d0c8]">
-             <div className="flex justify-center"><div className="w-12 h-12 border-4 border-blue-800 border-t-transparent rounded-full animate-spin"></div></div>
-             <div className="space-y-2">
-                <div className="flex justify-between text-[9px] font-bold"><span>UPLINK_PROGRESS</span><span>SYNCHRONIZING</span></div>
-                <div className="w-full h-4 bg-white border border-gray-600 p-[1px]">
-                  <div className="h-full bg-blue-800 animate-[loading_2.6s_ease-in_out_forwards]"></div>
-                </div>
-             </div>
-          </div>
+        <h1 className="text-6xl md:text-8xl font-bold tracking-tighter text-white animate-fade-in">
+          Build the Web at{" "}
+          <span className="aura-text-gradient">Thought Speed</span>.
+        </h1>
+        <p className="text-zinc-400 text-lg md:text-xl max-w-xl mx-auto leading-relaxed font-light">
+          Aura Studio translates natural language into high-performance,
+          responsive web interfaces using the Aura_Core synthesis engine.
+        </p>
+
+        <div className="flex flex-col sm:flex-row gap-4 justify-center pt-8">
+          <button
+            onClick={() => navigate("/studio")}
+            onMouseEnter={() => setIsHovered(true)}
+            onMouseLeave={() => setIsHovered(false)}
+            className="aura-gradient px-10 py-4 rounded-xl font-bold text-white shadow-lg shadow-blue-500/20 transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-2"
+          >
+            Start Creating
+            <div
+              className={`transition-transform duration-300 ${isHovered ? "translate-x-1" : ""}`}
+            >
+              →
+            </div>
+          </button>
+          <button
+            onClick={() => navigate("/login")}
+            className="glass-panel px-10 py-4 rounded-xl font-bold text-white transition-all hover:bg-white/5"
+          >
+            Sign In
+          </button>
         </div>
-      )}
-      <style>{`
-        @keyframes loading { from { width: 0%; } to { width: 100%; } }
-        @keyframes aura-fade-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        .animate-aura-in { animation: aura-fade-in 0.4s ease-out; }
-      `}</style>
+      </div>
+
+      <div className="absolute bottom-10 left-1/2 -translate-x-1/2 flex items-center gap-6 opacity-30 grayscale hover:grayscale-0 transition-all duration-500">
+        <span className="text-[10px] uppercase tracking-widest font-bold">
+          Powered by Gemini 3.0
+        </span>
+        <div className="w-1 h-1 bg-zinc-600 rounded-full"></div>
+        <span className="text-[10px] uppercase tracking-widest font-bold">
+          Tailwind v4 Optimized
+        </span>
+      </div>
     </div>
   );
 };
 
-const AuthPage = ({ isSignUp = false }) => {
+const AuthPage = ({ isSignUp = false }: { isSignUp?: boolean }) => {
   const navigate = useNavigate();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const handleAuth = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!supabase) return;
-    setIsLoading(true);
+    setLoading(true);
     try {
       if (isSignUp) await supabase.auth.signUp({ email, password });
       else await supabase.auth.signInWithPassword({ email, password });
-      navigate('/studio');
-    } catch (err: any) { alert(err.message); } finally { setIsLoading(false); }
+      navigate("/studio");
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <div className="min-h-screen bg-[#3b5a75] flex items-center justify-center p-4">
-      <div className="win-panel w-full max-w-sm">
-        <WinTitleBar title={isSignUp ? "Identity Registry" : "Secure Authentication"} />
-        <form onSubmit={handleAuth} className="p-8 bg-[#d4d0c8] space-y-6">
-           <div className="space-y-1">
-             <label className="text-[10px] font-bold uppercase text-gray-600">User Identification (Email)</label>
-             <input type="email" value={email} onChange={e => setEmail(e.target.value)} required className="w-full win-inset p-2 text-xs font-mono" />
-           </div>
-           <div className="space-y-1">
-             <label className="text-[10px] font-bold uppercase text-gray-600">Access Key (Password)</label>
-             <input type="password" value={password} onChange={e => setPassword(e.target.value)} required className="w-full win-inset p-2 text-xs font-mono" />
-           </div>
-           <button className="win-button w-full font-bold h-10 bg-blue-100">{isLoading ? "ESTABLISHING..." : (isSignUp ? "CREATE IDENTITY" : "AUTHORIZE")}</button>
-           <div className="flex justify-between pt-4 border-t border-gray-400 text-[10px]">
-             <Link to={isSignUp ? "/login" : "/signup"} className="text-blue-900 underline">{isSignUp ? "Existing User" : "New Registration"}</Link>
-             <button type="button" onClick={() => navigate('/')}>Cancel</button>
-           </div>
+    <div className="min-h-screen bg-[#0a0a0c] flex items-center justify-center p-6">
+      <div className="glass-panel w-full max-w-md p-10 rounded-3xl space-y-8 shadow-2xl">
+        <div className="space-y-2">
+          <h2 className="text-3xl font-bold text-white tracking-tight">
+            {isSignUp ? "Join Aura" : "Welcome Back"}
+          </h2>
+          <p className="text-zinc-500 text-sm">
+            {isSignUp
+              ? "Start your journey into AI synthesis."
+              : "Access your saved neural nodes."}
+          </p>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-5">
+          <div className="space-y-2">
+            <label className="text-[10px] uppercase tracking-widest font-bold text-zinc-500">
+              Electronic Mail
+            </label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500 transition-colors"
+              placeholder="name@nexus.com"
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-[10px] uppercase tracking-widest font-bold text-zinc-500">
+              Access Key
+            </label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500 transition-colors"
+              placeholder="••••••••"
+            />
+          </div>
+          <button className="w-full aura-gradient py-4 rounded-xl font-bold text-white shadow-lg hover:opacity-90 transition-all">
+            {loading
+              ? "Authenticating..."
+              : isSignUp
+                ? "Create Identity"
+                : "Establish Link"}
+          </button>
         </form>
+
+        <div className="pt-6 border-t border-zinc-800 flex justify-between items-center text-xs">
+          <Link
+            to={isSignUp ? "/login" : "/signup"}
+            className="text-blue-400 hover:text-blue-300 transition-colors font-medium"
+          >
+            {isSignUp ? "Existing user?" : "New registration?"}
+          </Link>
+          <button
+            onClick={() => navigate("/")}
+            className="text-zinc-500 hover:text-white transition-colors"
+          >
+            Cancel
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -217,110 +235,260 @@ const AuthPage = ({ isSignUp = false }) => {
 
 const StudioPage = () => {
   const navigate = useNavigate();
-  const [messages, setMessages] = useState<Message[]>([{ role: 'assistant', content: "Aura_Core v1.0.4 Online. System Idle.", timestamp: new Date() }]);
-  const [input, setInput] = useState('');
+  const [messages, setMessages] = useState<Message[]>([
+    {
+      role: "assistant",
+      content: "AURA_CORE initialized. Awaiting design parameters.",
+      timestamp: new Date(),
+    },
+  ]);
+  const [input, setInput] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
-  const [code, setCode] = useState('');
-  const [activeTab, setActiveTab] = useState<'preview' | 'code'>('preview');
+  const [code, setCode] = useState("");
+  const [activeTab, setActiveTab] = useState<"preview" | "code">("preview");
   const [userId, setUserId] = useState<string | null>(null);
-  const consoleRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    supabase?.auth.getSession().then(({ data: { session } }) => { if (session?.user) setUserId(session.user.id); });
+    supabase?.auth
+      .getSession()
+      .then(({ data: { session } }) => setUserId(session?.user?.id || null));
   }, []);
 
-  useEffect(() => { if (consoleRef.current) consoleRef.current.scrollTop = consoleRef.current.scrollHeight; }, [messages, isGenerating]);
+  useEffect(() => {
+    if (scrollRef.current)
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+  }, [messages, isGenerating]);
 
-  const handleSend = async (e: React.FormEvent) => {
+  const handleSynthesize = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input || isGenerating) return;
-    const currentInput = input;
-    setMessages(prev => [...prev, { role: 'user', content: currentInput, timestamp: new Date() }]);
-    setInput('');
+
+    const userMsg: Message = {
+      role: "user",
+      content: input,
+      timestamp: new Date(),
+    };
+    setMessages((prev) => [...prev, userMsg]);
+    setInput("");
     setIsGenerating(true);
+
     try {
-      const response = await generateWebsite(currentInput, messages);
+      const response = await generateWebsite(input, messages);
       const codeMatch = response.match(/```html\s*([\s\S]*?)\s*```/i);
       const summaryMatch = response.match(/SUMMARY:\s*(.*)/i);
       const cleanCode = codeMatch ? codeMatch[1].trim() : response;
-      const summary = summaryMatch ? summaryMatch[1].trim() : "Neural synthesis completed successfully.";
-      
+      const summary = summaryMatch
+        ? summaryMatch[1].trim()
+        : "Neural synthesis completed successfully.";
+
       setCode(cleanCode);
-      setMessages(prev => [...prev, { role: 'assistant', content: summary, timestamp: new Date() }]);
-      if (userId) storageService.saveProject(userId, "Project_Build", cleanCode, messages);
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: summary, timestamp: new Date() },
+      ]);
+
+      if (userId) storageService.saveProject(userId, cleanCode, messages);
     } catch (err: any) {
-      setMessages(prev => [...prev, { role: 'assistant', content: `CRITICAL_ERROR: ${err.message}`, timestamp: new Date() }]);
-    } finally { setIsGenerating(false); }
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content: `CRITICAL_ERROR: ${err.message}`,
+          timestamp: new Date(),
+        },
+      ]);
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   return (
-    <div className="h-screen flex flex-col bg-[#d4d0c8] overflow-hidden">
-      <div className="win-title-bar bg-gray-300 border-b border-gray-500 !text-black !font-normal px-2 py-1 flex items-center justify-between">
-        <div className="flex gap-4 text-[11px] font-bold">
-           <button onClick={() => navigate('/')} className="hover:text-blue-900">FILE</button>
-           <button className="opacity-50">EDIT</button>
-           <button className="opacity-50">VIEW</button>
-           <button className="hover:text-blue-900">UPLINK</button>
-        </div>
-        <div className="text-[10px] font-mono text-gray-600">AURA_STUDIO_NODE_01</div>
-      </div>
-
-      <div className="flex-1 flex p-1 gap-1 overflow-hidden">
-        {/* LEFT PANEL: CONSOLE */}
-        <div className="w-80 flex flex-col gap-1">
-          <div className="win-panel flex-1 flex flex-col overflow-hidden">
-            <WinTitleBar title="Aura_Console" />
-            <div ref={consoleRef} className="flex-1 bg-black text-green-500 font-mono text-[11px] p-4 overflow-y-auto leading-relaxed selection:bg-green-900">
-               <div className="opacity-30 mb-4 border-b border-gray-800 pb-2">AURA STUDIO v1.0.4 [DEBUG MODE]<br/>ACTIVE_UPLINK: {userId ? 'SECURE' : 'GUEST'}</div>
-               {messages.map((m, i) => (
-                 <div key={i} className="mb-3 animate-aura-in">
-                   <span className={m.role === 'user' ? 'text-blue-400' : 'text-green-500'}>{m.role === 'user' ? '> ' : 'AURA> '}</span>
-                   <span className="text-gray-100">{m.content}</span>
-                 </div>
-               ))}
-               {isGenerating && <div className="text-white animate-pulse">_PROCESSING_SYNTHESIS...</div>}
+    <div className="h-screen flex flex-col bg-[#050505] text-white">
+      {/* CLEAN HEADER */}
+      <header className="h-14 border-b border-zinc-800 bg-zinc-950 flex items-center justify-between px-6 z-50">
+        <div className="flex items-center gap-6">
+          <button
+            onClick={() => navigate("/")}
+            className="flex items-center gap-2 group"
+          >
+            <div className="w-8 h-8 aura-gradient rounded-lg flex items-center justify-center font-bold text-lg group-hover:scale-110 transition-transform">
+              A
             </div>
-            <form onSubmit={handleSend} className="p-3 bg-[#d4d0c8] border-t border-gray-400">
-              <input value={input} onChange={e => setInput(e.target.value)} placeholder="Enter design command..." className="w-full win-inset p-3 text-xs font-mono mb-2 h-12" autoFocus />
-              <button disabled={isGenerating} className="win-button w-full font-bold h-10 bg-gray-100 uppercase tracking-tighter">Synthesize Build</button>
-            </form>
+            <span className="font-bold tracking-tighter text-lg">
+              Aura Studio
+            </span>
+          </button>
+          <div className="h-4 w-px bg-zinc-800"></div>
+          <div className="flex items-center gap-2 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
+            <div
+              className={`w-2 h-2 rounded-full ${isGenerating ? "bg-amber-500 animate-pulse" : "bg-green-500"}`}
+            ></div>
+            {isGenerating ? "Synthesizing..." : "System Ready"}
           </div>
         </div>
 
-        {/* RIGHT PANEL: VISUALIZER */}
-        <div className="flex-1 flex flex-col gap-1 overflow-hidden">
-          <div className="win-panel flex-1 flex flex-col overflow-hidden">
-             <div className="win-title-bar !bg-gray-400 flex justify-between">
-                <div className="flex gap-1 h-full items-end">
-                   <button onClick={() => setActiveTab('preview')} className={`px-4 py-1 text-[10px] border-t border-x font-bold ${activeTab === 'preview' ? 'bg-[#d4d0c8] text-black border-white' : 'bg-gray-500 text-gray-700 opacity-60'}`}>Visualizer</button>
-                   <button onClick={() => setActiveTab('code')} className={`px-4 py-1 text-[10px] border-t border-x font-bold ${activeTab === 'code' ? 'bg-[#d4d0c8] text-black border-white' : 'bg-gray-500 text-gray-700 opacity-60'}`}>Source Viewer</button>
-                </div>
-                {code && <div className="flex gap-1 pr-1 pb-1"><button onClick={() => {navigator.clipboard.writeText(code); alert("Copied.");}} className="win-button py-0 px-2 h-4 text-[9px] bg-blue-100">COPY</button></div>}
-             </div>
-             <div className="flex-1 win-inset m-1 bg-white relative overflow-hidden">
-                {activeTab === 'preview' ? (
-                  code ? <iframe srcDoc={code} className="w-full h-full border-none animate-aura-in" sandbox="allow-scripts" /> : 
-                  <div className="w-full h-full flex flex-col items-center justify-center opacity-20 italic p-20 text-center text-xs">Awaiting neural data to render interface visualization...</div>
-                ) : (
-                  <textarea readOnly value={code} className="w-full h-full p-6 font-mono text-[10px] resize-none outline-none bg-[#fafafa]" />
-                )}
-                {isGenerating && (
-                  <div className="absolute inset-0 bg-white/60 backdrop-blur-[1px] flex items-center justify-center z-50">
-                    <div className="win-panel p-6 bg-[#d4d0c8] shadow-2xl flex flex-col items-center gap-3">
-                       <div className="w-48 h-2 bg-gray-300 border border-gray-600 overflow-hidden"><div className="h-full bg-blue-800 w-1/2 animate-[loading_1s_linear_infinite]"></div></div>
-                       <span className="text-[9px] font-bold uppercase tracking-widest text-gray-600">Reconstructing Atomic UI...</span>
-                    </div>
-                  </div>
-                )}
-             </div>
-          </div>
+        <div className="flex items-center gap-4">
+          {userId && (
+            <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
+              {userId.slice(0, 8)}@nexus
+            </div>
+          )}
+          <button
+            onClick={() => navigate("/")}
+            className="text-zinc-400 hover:text-white transition-colors"
+          >
+            <i data-lucide="log-out" className="w-4 h-4"></i>
+          </button>
         </div>
-      </div>
-      <style>{`
-        @keyframes loading { from { transform: translateX(-100%); } to { transform: translateX(200%); } }
-        ::-webkit-scrollbar { width: 14px; }
-        ::-webkit-scrollbar-thumb { background: #d4d0c8; border: 1px solid #fff; box-shadow: inset -1px -1px #444; }
-      `}</style>
+      </header>
+
+      {/* WORKSPACE */}
+      <main className="flex-1 flex overflow-hidden p-3 gap-3">
+        {/* CONSOLE PANEL */}
+        <aside className="w-96 flex flex-col gap-3">
+          <section className="glass-panel flex-1 flex flex-col rounded-2xl overflow-hidden shadow-2xl">
+            <div className="px-4 py-3 border-b border-zinc-800 bg-zinc-900/50 flex justify-between items-center">
+              <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400">
+                Aura_Console
+              </span>
+              <div className="flex gap-1">
+                <div className="w-2 h-2 rounded-full bg-zinc-700"></div>
+                <div className="w-2 h-2 rounded-full bg-zinc-700"></div>
+              </div>
+            </div>
+            <div
+              ref={scrollRef}
+              className="flex-1 p-5 overflow-y-auto space-y-6 font-mono text-[11px] leading-relaxed"
+            >
+              {messages.map((m, i) => (
+                <div
+                  key={i}
+                  className={`flex gap-3 ${m.role === "user" ? "opacity-100" : "opacity-80"}`}
+                >
+                  <span
+                    className={
+                      m.role === "user"
+                        ? "text-blue-400 font-bold"
+                        : "text-purple-400 font-bold"
+                    }
+                  >
+                    {m.role === "user" ? "USR>" : "AURA>"}
+                  </span>
+                  <div className="flex-1 text-zinc-300">{m.content}</div>
+                </div>
+              ))}
+              {isGenerating && (
+                <div className="animate-pulse text-zinc-500 italic">
+                  Processing design vectors...
+                </div>
+              )}
+            </div>
+            <form
+              onSubmit={handleSynthesize}
+              className="p-4 border-t border-zinc-800 bg-zinc-950"
+            >
+              <div className="relative">
+                <input
+                  autoFocus
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  placeholder="Describe your site components..."
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3.5 text-xs font-mono focus:outline-none focus:border-blue-500 transition-all pr-12"
+                />
+                <button
+                  disabled={isGenerating}
+                  className="absolute right-2 top-2 p-2 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-white transition-all disabled:opacity-30"
+                >
+                  <svg
+                    className="w-5 h-5"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M14 5l7 7m0 0l-7 7m7-7H3"
+                    />
+                  </svg>
+                </button>
+              </div>
+            </form>
+          </section>
+        </aside>
+
+        {/* VISUALIZER PANEL */}
+        <section className="flex-1 glass-panel rounded-2xl flex flex-col overflow-hidden shadow-2xl border-zinc-800">
+          <div className="px-4 py-1.5 border-b border-zinc-800 bg-zinc-900/50 flex justify-between items-center">
+            <div className="flex gap-2">
+              <button
+                onClick={() => setActiveTab("preview")}
+                className={`px-4 py-2 text-[10px] font-bold uppercase tracking-widest transition-all ${activeTab === "preview" ? "text-white border-b border-blue-500" : "text-zinc-500 hover:text-zinc-300"}`}
+              >
+                Visualizer
+              </button>
+              <button
+                onClick={() => setActiveTab("code")}
+                className={`px-4 py-2 text-[10px] font-bold uppercase tracking-widest transition-all ${activeTab === "code" ? "text-white border-b border-blue-500" : "text-zinc-500 hover:text-zinc-300"}`}
+              >
+                Source Code
+              </button>
+            </div>
+            <div className="flex gap-2">
+              {code && (
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(code);
+                    alert("Uplink Successful: Code copied.");
+                  }}
+                  className="px-3 py-1 bg-zinc-800 hover:bg-zinc-700 rounded text-[9px] font-bold uppercase transition-all"
+                >
+                  Copy
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="flex-1 bg-white relative">
+            {activeTab === "preview" ? (
+              code ? (
+                <iframe
+                  srcDoc={code}
+                  className="w-full h-full border-none shadow-inner"
+                  sandbox="allow-scripts"
+                />
+              ) : (
+                <div className="h-full bg-zinc-950 flex flex-col items-center justify-center space-y-4 opacity-30 grayscale p-20 text-center">
+                  <div className="w-20 h-20 aura-gradient rounded-3xl animate-pulse"></div>
+                  <p className="text-xs font-mono">
+                    NEURAL_READY: Submit parameters via console to initialize
+                    viewport.
+                  </p>
+                </div>
+              )
+            ) : (
+              <textarea
+                readOnly
+                value={code}
+                className="w-full h-full bg-zinc-950 p-8 font-mono text-[11px] text-blue-300/80 resize-none focus:outline-none selection:bg-blue-500/30"
+              />
+            )}
+
+            {isGenerating && (
+              <div className="absolute inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center">
+                <div className="glass-panel p-8 rounded-2xl flex flex-col items-center gap-4 animate-in zoom-in duration-300">
+                  <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                  <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-blue-400">
+                    Refining Build...
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+        </section>
+      </main>
     </div>
   );
 };
@@ -338,5 +506,5 @@ const App = () => (
   </Router>
 );
 
-const root = ReactDOM.createRoot(document.getElementById('root')!);
+const root = ReactDOM.createRoot(document.getElementById("root")!);
 root.render(<App />);

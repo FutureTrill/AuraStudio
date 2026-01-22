@@ -1,9 +1,3 @@
-
 {
-  "name": "Aura Studio AI",
-  "description": "A professional AI-powered website builder that transforms natural language into high-performance web applications using the Aura_Core engine.",
-  "requestFramePermissions": [
-    "camera",
-    "microphone"
-  ]
+  "requestFramePermissions": []
 }
