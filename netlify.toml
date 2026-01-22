@@ -3,13 +3,18 @@
   publish = "."
 
 [[redirects]]
-  # Ensure static assets are served directly
-  from = "/index.tsx"
-  to = "/index.tsx"
+  # Specifically allow .tsx and .ts files to bypass the catch-all redirect
+  from = "/*.tsx"
+  to = "/*.tsx"
   status = 200
 
 [[redirects]]
-  # Handle SPA Routing
+  from = "/*.ts"
+  to = "/*.ts"
+  status = 200
+
+[[redirects]]
+  # SPA Catch-all (Only runs if the file doesn't exist)
   from = "/*"
   to = "/index.html"
   status = 200
@@ -27,16 +32,11 @@
     X-Content-Type-Options = "nosniff"
 
 [[headers]]
-  for = "/pages/*.tsx"
+  for = "/**/*.tsx"
   [headers.values]
     Content-Type = "application/javascript; charset=utf-8"
 
 [[headers]]
-  for = "/services/*.ts"
-  [headers.values]
-    Content-Type = "application/javascript; charset=utf-8"
-
-[[headers]]
-  for = "/lib/*.ts"
+  for = "/**/*.ts"
   [headers.values]
     Content-Type = "application/javascript; charset=utf-8"

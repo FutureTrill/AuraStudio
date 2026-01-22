@@ -5,14 +5,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Aura Studio - AI Web Builder</title>
 
+    <!-- Environment Shim -->
+    <script>
+      window.process = { env: { API_KEY: "" } };
+    </script>
+
     <!-- Dependencies -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- Corrected & to &amp; for HTML compliance -->
     <link
-      href="https://fonts.googleapis.com/css2?family=Verdana:wght@400;700&family=Courier+Prime&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Verdana:wght@400;700&amp;family=Courier+Prime&amp;display=swap"
       rel="stylesheet"
     />
 
@@ -31,7 +37,6 @@
         background-color: var(--desktop-teal);
         color: #000;
         overflow: hidden;
-        /* Fixed Noise Pattern */
         background-image: radial-gradient(
           rgba(255, 255, 255, 0.05) 1px,
           transparent 1px
@@ -113,21 +118,22 @@
       {
         "imports": {
           "react": "https://esm.sh/react@^19.2.3",
-          "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
-          "react/": "https://esm.sh/react@^19.2.3/",
+          "react-dom/client": "https://esm.sh/react-dom@^19.2.3/client",
+          "react-router-dom": "https://esm.sh/react-router-dom@^7.12.0",
           "@google/genai": "https://esm.sh/@google/genai@^1.38.0",
-          "react-router-dom": "https://esm.sh/react-router-dom@^7.12.0"
+          "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+          "react/": "https://esm.sh/react@^19.2.3/"
         }
       }
     </script>
   </head>
   <body>
     <div id="root"></div>
-    <!-- Babel transforms the .tsx into JS that the browser can understand -->
+    <!-- Explicitly set the Babel presets and type to ensure compilation -->
     <script
       type="text/babel"
       data-type="module"
-      data-presets="typescript,react"
+      data-presets="react,typescript"
       src="./index.tsx"
     ></script>
   </body>
